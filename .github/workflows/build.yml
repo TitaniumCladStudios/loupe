@@ -18,9 +18,7 @@ jobs:
           - platform: ubuntu-22.04
             target: linux
           - platform: macos-latest
-            target: macos-arm
-          - platform: macos-13
-            target: macos-intel
+            target: macos
           - platform: windows-latest
             target: windows
 
