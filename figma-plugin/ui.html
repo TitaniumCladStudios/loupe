@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    padding: 20px;
+    text-align: center;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  p {
+    color: #666;
+    margin-bottom: 20px;
+    line-height: 1.4;
+  }
+  button {
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    background: #6366f1;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: #4f46e5; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status {
+    margin-top: 12px;
+    font-size: 12px;
+    min-height: 18px;
+  }
+  .status.error { color: #ef4444; }
+  .status.success { color: #16a34a; }
+  .status.info { color: #6366f1; }
+</style>
+</head>
+<body>
+  <h1>Loupe</h1>
+  <p>Select a frame in Figma, then click the button below.</p>
+  <button id="send" onclick="sendToLoupe()">Send to Loupe</button>
+  <div id="status" class="status"></div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const sendBtn = document.getElementById('send');
+
+    function setStatus(msg, type) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status ' + (type || '');
+    }
+
+    function sendToLoupe() {
+      sendBtn.disabled = true;
+      setStatus('Exporting frame...', 'info');
+      parent.postMessage({ pluginMessage: { type: 'send-to-loupe' } }, '*');
+    }
+
+    function uint8ToBase64(bytes) {
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    }
+
+    onmessage = async (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+
+      if (msg.type === 'exported') {
+        setStatus('Sending to Loupe...', 'info');
+        const bytes = new Uint8Array(msg.data);
+        const base64 = uint8ToBase64(bytes);
+
+        try {
+          const resp = await fetch('http://localhost:7700/figma', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: 'data:image/png;base64,' + base64 }),
+          });
+
+          if (resp.ok) {
+            setStatus('Sent "' + msg.name + '" to Loupe!', 'success');
+          } else {
+            setStatus('Server error: ' + resp.status, 'error');
+          }
+        } catch (err) {
+          setStatus('Could not reach Loupe. Is the app running?', 'error');
+        }
+
+        sendBtn.disabled = false;
+      }
+
+      if (msg.type === 'error') {
+        setStatus(msg.message, 'error');
+        sendBtn.disabled = false;
+      }
+
+      if (msg.type === 'status') {
+        setStatus(msg.message, 'info');
+      }
+    };
+  </script>
+</body>
+</html>
