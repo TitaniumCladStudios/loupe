@@ -98,22 +98,46 @@ fn picker_script() -> String {
         }, 600);
     }
 
+    // Toast for visible feedback
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:8px;font:14px sans-serif;z-index:2147483647;pointer-events:none;opacity:0;transition:opacity 0.3s;';
+    document.body.appendChild(toast);
+
+    function showToast(msg, isError) {
+        toast.textContent = msg;
+        toast.style.background = isError ? '#ef4444' : '#22c55e';
+        toast.style.color = '#fff';
+        toast.style.opacity = '1';
+        setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+    }
+
     async function captureElement(el, win) {
         flashOverlay('#22c55e', 'rgba(34,197,94,0.12)');
         try {
             const h2c = win.html2canvas || window.html2canvas;
+            if (!h2c) {
+                showToast('Loupe: html2canvas not loaded', true);
+                return;
+            }
+            showToast('Loupe: capturing element...', false);
             const canvas = await h2c(el, {
                 useCORS: true,
                 allowTaint: true,
                 backgroundColor: null,
             });
             const dataUrl = canvas.toDataURL('image/png');
-            await fetch('http://localhost:7700/capture', {
+            const resp = await fetch('http://localhost:7700/capture', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image: dataUrl })
             });
+            if (resp.ok) {
+                showToast('Loupe: captured! Check the app.', false);
+            } else {
+                showToast('Loupe: server error ' + resp.status, true);
+            }
         } catch(err) {
+            showToast('Loupe: ' + err.message, true);
             console.error('Loupe capture error:', err);
         }
     }
