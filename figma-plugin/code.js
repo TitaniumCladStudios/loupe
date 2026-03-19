@@ -1,4 +1,6 @@
-figma.showUI(__html__, { width: 320, height: 240 });
+if (figma.command === 'send') {
+  figma.showUI(__html__, { width: 320, height: 240 });
+}
 
 figma.ui.onmessage = async (msg) => {
   if (msg.type === 'send-to-loupe') {
@@ -19,7 +21,6 @@ figma.ui.onmessage = async (msg) => {
         constraint: { type: 'SCALE', value: 2 },
       });
 
-      // Send raw bytes to UI for base64 encoding and HTTP POST
       figma.ui.postMessage({
         type: 'exported',
         data: Array.from(bytes),

@@ -2,7 +2,14 @@
   "name": "Loupe",
   "id": "loupe-figma-plugin",
   "api": "1.0.0",
+  "editorType": ["dev"],
   "main": "code.js",
   "ui": "ui.html",
-  "editorType": ["dev"]
+  "permissions": ["activeusers"],
+  "menu": [
+    {
+      "name": "Send to Loupe",
+      "command": "send"
+    }
+  ]
 }
