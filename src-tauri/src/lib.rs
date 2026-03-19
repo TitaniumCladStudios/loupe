@@ -58,11 +58,11 @@ fn picker_script() -> String {
     if (window.__loupePickerActive) return;
     window.__loupePickerActive = true;
 
-    async function loadHtml2Canvas(doc) {
+    async function loadDomToImage(doc) {
         const win = doc.defaultView || window;
-        if (win.html2canvas) return;
+        if (win.domtoimage) return;
         const s = doc.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        s.src = 'https://cdn.jsdelivr.net/npm/dom-to-image-more@3.4.5/dist/dom-to-image-more.min.js';
         (doc.head || doc.documentElement).appendChild(s);
         await new Promise((resolve, reject) => {
             s.onload = resolve;
@@ -70,7 +70,7 @@ fn picker_script() -> String {
         });
     }
 
-    await loadHtml2Canvas(document);
+    await loadDomToImage(document);
 
     // Single overlay on the top-level page
     const overlay = document.createElement('div');
@@ -114,18 +114,13 @@ fn picker_script() -> String {
     async function captureElement(el, win) {
         flashOverlay('#22c55e', 'rgba(34,197,94,0.12)');
         try {
-            const h2c = win.html2canvas || window.html2canvas;
-            if (!h2c) {
-                showToast('Loupe: html2canvas not loaded', true);
+            const dti = win.domtoimage || window.domtoimage;
+            if (!dti) {
+                showToast('Loupe: dom-to-image not loaded', true);
                 return;
             }
             showToast('Loupe: capturing element...', false);
-            const canvas = await h2c(el, {
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: null,
-            });
-            const dataUrl = canvas.toDataURL('image/png');
+            const dataUrl = await dti.toPng(el);
             const resp = await fetch('http://localhost:7700/capture', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -183,7 +178,7 @@ fn picker_script() -> String {
         const iframeWin = iframe.contentWindow;
 
         // Load html2canvas inside the iframe
-        loadHtml2Canvas(iframeDoc).then(() => {
+        loadDomToImage(iframeDoc).then(() => {
             iframeDoc.addEventListener('mousemove', function(e) {
                 if (e.target === iframeDoc.body || e.target === iframeDoc.documentElement) {
                     overlay.style.display = 'none';
