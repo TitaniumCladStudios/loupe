@@ -59,10 +59,11 @@ fn picker_script() -> String {
     window.__loupePickerActive = true;
 
     async function loadHtml2Canvas(doc) {
-        if (doc.defaultView && doc.defaultView.html2canvas) return;
+        const win = doc.defaultView || window;
+        if (win.html2canvas) return;
         const s = doc.createElement('script');
         s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-        doc.head.appendChild(s);
+        (doc.head || doc.documentElement).appendChild(s);
         await new Promise((resolve, reject) => {
             s.onload = resolve;
             s.onerror = reject;
@@ -71,98 +72,150 @@ fn picker_script() -> String {
 
     await loadHtml2Canvas(document);
 
-    function setupPicker(doc, offsetX, offsetY) {
-        if (doc.__loupePickerReady) return;
-        doc.__loupePickerReady = true;
+    // Single overlay on the top-level page
+    const overlay = document.createElement('div');
+    overlay.id = '__loupe_overlay';
+    overlay.style.cssText = 'position:fixed;pointer-events:none;border:2px solid #6366f1;background:rgba(99,102,241,0.08);z-index:2147483647;transition:all 0.05s ease;display:none;';
+    document.body.appendChild(overlay);
 
-        const win = doc.defaultView || window;
+    let activeTarget = null;
+    let activeWin = null;
 
-        // Overlay lives on the top-level document so it's always visible
-        const overlay = document.createElement('div');
-        overlay.className = '__loupe_overlay';
-        overlay.style.cssText = 'position:fixed;pointer-events:none;border:2px solid #6366f1;background:rgba(99,102,241,0.08);z-index:2147483647;transition:all 0.05s ease;display:none;';
-        document.body.appendChild(overlay);
-
-        let hoveredEl = null;
-
-        doc.addEventListener('mousemove', function(e) {
-            hoveredEl = e.target;
-            if (hoveredEl === document.body || hoveredEl === doc.documentElement) {
-                overlay.style.display = 'none';
-                return;
-            }
-            const rect = hoveredEl.getBoundingClientRect();
-            overlay.style.display = 'block';
-            overlay.style.top = (rect.top + offsetY) + 'px';
-            overlay.style.left = (rect.left + offsetX) + 'px';
-            overlay.style.width = rect.width + 'px';
-            overlay.style.height = rect.height + 'px';
-        }, true);
-
-        doc.addEventListener('click', async function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            if (!hoveredEl) return;
-
-            overlay.style.border = '2px solid #22c55e';
-            overlay.style.background = 'rgba(34,197,94,0.12)';
-
-            try {
-                // Use html2canvas from the element's own window context
-                const h2c = win.html2canvas || window.html2canvas;
-                const canvas = await h2c(hoveredEl, {
-                    useCORS: true,
-                    allowTaint: true,
-                    backgroundColor: null,
-                });
-                const dataUrl = canvas.toDataURL('image/png');
-
-                await fetch('http://localhost:7700/capture', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: dataUrl })
-                });
-            } catch(err) {
-                console.error('Loupe capture error:', err);
-            }
-
-            setTimeout(() => {
-                overlay.style.border = '2px solid #6366f1';
-                overlay.style.background = 'rgba(99,102,241,0.08)';
-            }, 600);
-        }, true);
+    function showOverlay(rect) {
+        overlay.style.display = 'block';
+        overlay.style.top = rect.top + 'px';
+        overlay.style.left = rect.left + 'px';
+        overlay.style.width = rect.width + 'px';
+        overlay.style.height = rect.height + 'px';
     }
 
-    // Set up picker on the main document
-    setupPicker(document, 0, 0);
+    function flashOverlay(color, bg) {
+        overlay.style.border = '2px solid ' + color;
+        overlay.style.background = bg;
+        setTimeout(() => {
+            overlay.style.border = '2px solid #6366f1';
+            overlay.style.background = 'rgba(99,102,241,0.08)';
+        }, 600);
+    }
 
-    // Inject into all same-origin iframes (e.g. Storybook story iframe)
-    async function injectIntoIframes() {
-        const iframes = document.querySelectorAll('iframe');
-        for (const iframe of iframes) {
-            try {
-                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                if (!iframeDoc || iframeDoc.__loupePickerReady) continue;
-
-                await loadHtml2Canvas(iframeDoc);
-
-                const iframeRect = iframe.getBoundingClientRect();
-                setupPicker(iframeDoc, iframeRect.left, iframeRect.top);
-            } catch(e) {
-                // Cross-origin iframe, skip
-            }
+    async function captureElement(el, win) {
+        flashOverlay('#22c55e', 'rgba(34,197,94,0.12)');
+        try {
+            const h2c = win.html2canvas || window.html2canvas;
+            const canvas = await h2c(el, {
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: null,
+            });
+            const dataUrl = canvas.toDataURL('image/png');
+            await fetch('http://localhost:7700/capture', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: dataUrl })
+            });
+        } catch(err) {
+            console.error('Loupe capture error:', err);
         }
     }
 
-    await injectIntoIframes();
+    // Parent document: only handles non-iframe elements
+    document.addEventListener('mousemove', function(e) {
+        if (e.target.tagName === 'IFRAME') {
+            // Let the iframe handle its own hover
+            overlay.style.display = 'none';
+            activeTarget = null;
+            return;
+        }
+        if (e.target === overlay || e.target === document.body || e.target === document.documentElement) {
+            overlay.style.display = 'none';
+            activeTarget = null;
+            return;
+        }
+        activeTarget = e.target;
+        activeWin = window;
+        showOverlay(e.target.getBoundingClientRect());
+    }, true);
 
-    // Watch for dynamically added iframes
-    const observer = new MutationObserver(() => { injectIntoIframes(); });
+    document.addEventListener('click', async function(e) {
+        if (!activeTarget || e.target.tagName === 'IFRAME') return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        await captureElement(activeTarget, activeWin);
+    }, true);
+
+    // Inject picker into a same-origin iframe
+    function setupIframe(iframe) {
+        if (iframe.__loupeReady) return;
+        let iframeDoc;
+        try {
+            iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            if (!iframeDoc || !iframeDoc.body) return;
+        } catch(e) {
+            return; // cross-origin
+        }
+        iframe.__loupeReady = true;
+
+        const iframeWin = iframe.contentWindow;
+
+        // Load html2canvas inside the iframe
+        loadHtml2Canvas(iframeDoc).then(() => {
+            iframeDoc.addEventListener('mousemove', function(e) {
+                if (e.target === iframeDoc.body || e.target === iframeDoc.documentElement) {
+                    overlay.style.display = 'none';
+                    activeTarget = null;
+                    return;
+                }
+                activeTarget = e.target;
+                activeWin = iframeWin;
+
+                // Translate iframe-local rect to top-level coordinates
+                const elRect = e.target.getBoundingClientRect();
+                const iframeRect = iframe.getBoundingClientRect();
+                showOverlay({
+                    top: elRect.top + iframeRect.top,
+                    left: elRect.left + iframeRect.left,
+                    width: elRect.width,
+                    height: elRect.height,
+                });
+            }, true);
+
+            iframeDoc.addEventListener('click', async function(e) {
+                if (!activeTarget) return;
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                await captureElement(activeTarget, activeWin);
+            }, true);
+        }).catch(() => {});
+    }
+
+    function scanIframes() {
+        document.querySelectorAll('iframe').forEach(iframe => {
+            setupIframe(iframe);
+            // Also retry when iframe navigates or loads new content
+            if (!iframe.__loupeLoadListener) {
+                iframe.__loupeLoadListener = true;
+                iframe.addEventListener('load', () => {
+                    iframe.__loupeReady = false;
+                    setupIframe(iframe);
+                });
+            }
+        });
+    }
+
+    scanIframes();
+
+    const observer = new MutationObserver(scanIframes);
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // Re-check periodically for iframes that load late (Storybook lazy-loads)
-    setInterval(injectIntoIframes, 2000);
+    // Storybook lazy-loads its iframe; poll until we find and inject into it
+    const poll = setInterval(() => {
+        scanIframes();
+        const injected = document.querySelector('iframe[__loupeReady]') ||
+            [...document.querySelectorAll('iframe')].some(f => f.__loupeReady);
+        if (injected) clearInterval(poll);
+    }, 1000);
 })();
 "#
     .to_string()
