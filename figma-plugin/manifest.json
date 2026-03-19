@@ -5,6 +5,7 @@
   "editorType": ["dev"],
   "main": "code.js",
   "ui": "ui.html",
+  "capabilities": ["inspect"],
   "permissions": ["activeusers"],
   "menu": [
     {
