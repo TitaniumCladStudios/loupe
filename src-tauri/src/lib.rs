@@ -58,47 +58,29 @@ fn picker_script() -> String {
     if (window.__loupePickerActive) return;
     window.__loupePickerActive = true;
 
-    async function loadDomToImage(doc) {
-        const win = doc.defaultView || window;
-        if (win.domtoimage) return;
-        const s = doc.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/dom-to-image-more@3.4.5/dist/dom-to-image-more.min.js';
-        (doc.head || doc.documentElement).appendChild(s);
+    // Load html2canvas
+    if (!window.html2canvas) {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        document.head.appendChild(s);
         await new Promise((resolve, reject) => {
             s.onload = resolve;
             s.onerror = reject;
         });
     }
 
-    await loadDomToImage(document);
-
-    // Single overlay on the top-level page
     const overlay = document.createElement('div');
     overlay.id = '__loupe_overlay';
     overlay.style.cssText = 'position:fixed;pointer-events:none;border:2px solid #6366f1;background:rgba(99,102,241,0.08);z-index:2147483647;transition:all 0.05s ease;display:none;';
     document.body.appendChild(overlay);
 
-    let activeTarget = null;
-    let activeWin = null;
+    // Label shown on iframes
+    const iframeLabel = document.createElement('div');
+    iframeLabel.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483647;background:#6366f1;color:#fff;font:12px/1 sans-serif;padding:4px 8px;border-radius:4px;display:none;white-space:nowrap;';
+    iframeLabel.textContent = 'Click to enter iframe';
+    document.body.appendChild(iframeLabel);
 
-    function showOverlay(rect) {
-        overlay.style.display = 'block';
-        overlay.style.top = rect.top + 'px';
-        overlay.style.left = rect.left + 'px';
-        overlay.style.width = rect.width + 'px';
-        overlay.style.height = rect.height + 'px';
-    }
-
-    function flashOverlay(color, bg) {
-        overlay.style.border = '2px solid ' + color;
-        overlay.style.background = bg;
-        setTimeout(() => {
-            overlay.style.border = '2px solid #6366f1';
-            overlay.style.background = 'rgba(99,102,241,0.08)';
-        }, 600);
-    }
-
-    // Toast for visible feedback
+    // Toast for feedback
     const toast = document.createElement('div');
     toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:8px;font:14px sans-serif;z-index:2147483647;pointer-events:none;opacity:0;transition:opacity 0.3s;';
     document.body.appendChild(toast);
@@ -111,133 +93,105 @@ fn picker_script() -> String {
         setTimeout(() => { toast.style.opacity = '0'; }, 3000);
     }
 
-    async function captureElement(el, win) {
-        flashOverlay('#22c55e', 'rgba(34,197,94,0.12)');
-        try {
-            const dti = win.domtoimage || window.domtoimage;
-            if (!dti) {
-                showToast('Loupe: dom-to-image not loaded', true);
-                return;
+    let hoveredEl = null;
+
+    document.addEventListener('mousemove', function(e) {
+        hoveredEl = e.target;
+
+        if (hoveredEl === overlay || hoveredEl === document.body || hoveredEl === document.documentElement) {
+            overlay.style.display = 'none';
+            iframeLabel.style.display = 'none';
+            return;
+        }
+
+        const rect = hoveredEl.getBoundingClientRect();
+        overlay.style.display = 'block';
+        overlay.style.top = rect.top + 'px';
+        overlay.style.left = rect.left + 'px';
+        overlay.style.width = rect.width + 'px';
+        overlay.style.height = rect.height + 'px';
+
+        // Show label hint on iframes
+        if (hoveredEl.tagName === 'IFRAME') {
+            iframeLabel.style.display = 'block';
+            iframeLabel.style.top = (rect.top + 8) + 'px';
+            iframeLabel.style.left = (rect.left + 8) + 'px';
+            overlay.style.border = '2px dashed #6366f1';
+        } else {
+            iframeLabel.style.display = 'none';
+            overlay.style.border = '2px solid #6366f1';
+        }
+    }, true);
+
+    document.addEventListener('click', async function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (!hoveredEl) return;
+
+        // Clicking an iframe navigates into it
+        if (hoveredEl.tagName === 'IFRAME') {
+            const src = hoveredEl.src || hoveredEl.getAttribute('src');
+            if (src) {
+                showToast('Navigating into iframe...', false);
+                window.location.href = src;
+            } else {
+                showToast('Iframe has no src URL', true);
             }
-            showToast('Loupe: capturing element...', false);
-            const dataUrl = await dti.toPng(el);
+            return;
+        }
+
+        overlay.style.border = '2px solid #22c55e';
+        overlay.style.background = 'rgba(34,197,94,0.12)';
+
+        try {
+            showToast('Capturing...', false);
+            const canvas = await html2canvas(hoveredEl, {
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: null,
+            });
+            const dataUrl = canvas.toDataURL('image/png');
+
             const resp = await fetch('http://localhost:7700/capture', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image: dataUrl })
             });
             if (resp.ok) {
-                showToast('Loupe: captured! Check the app.', false);
+                showToast('Captured! Check the Loupe app.', false);
             } else {
-                showToast('Loupe: server error ' + resp.status, true);
+                showToast('Server error: ' + resp.status, true);
             }
         } catch(err) {
-            showToast('Loupe: ' + err.message, true);
+            showToast('Capture error: ' + err.message, true);
             console.error('Loupe capture error:', err);
         }
-    }
 
-    // Parent document: only handles non-iframe elements
-    document.addEventListener('mousemove', function(e) {
-        if (e.target.tagName === 'IFRAME') {
-            // Let the iframe handle its own hover
-            overlay.style.display = 'none';
-            activeTarget = null;
-            return;
-        }
-        if (e.target === overlay || e.target === document.body || e.target === document.documentElement) {
-            overlay.style.display = 'none';
-            activeTarget = null;
-            return;
-        }
-        activeTarget = e.target;
-        activeWin = window;
-        showOverlay(e.target.getBoundingClientRect());
+        setTimeout(() => {
+            overlay.style.border = '2px solid #6366f1';
+            overlay.style.background = 'rgba(99,102,241,0.08)';
+        }, 600);
     }, true);
-
-    document.addEventListener('click', async function(e) {
-        if (!activeTarget || e.target.tagName === 'IFRAME') return;
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        await captureElement(activeTarget, activeWin);
-    }, true);
-
-    // Inject picker into a same-origin iframe
-    function setupIframe(iframe) {
-        if (iframe.__loupeReady) return;
-        let iframeDoc;
-        try {
-            iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-            if (!iframeDoc || !iframeDoc.body) return;
-        } catch(e) {
-            return; // cross-origin
-        }
-        iframe.__loupeReady = true;
-
-        const iframeWin = iframe.contentWindow;
-
-        // Load html2canvas inside the iframe
-        loadDomToImage(iframeDoc).then(() => {
-            iframeDoc.addEventListener('mousemove', function(e) {
-                if (e.target === iframeDoc.body || e.target === iframeDoc.documentElement) {
-                    overlay.style.display = 'none';
-                    activeTarget = null;
-                    return;
-                }
-                activeTarget = e.target;
-                activeWin = iframeWin;
-
-                // Translate iframe-local rect to top-level coordinates
-                const elRect = e.target.getBoundingClientRect();
-                const iframeRect = iframe.getBoundingClientRect();
-                showOverlay({
-                    top: elRect.top + iframeRect.top,
-                    left: elRect.left + iframeRect.left,
-                    width: elRect.width,
-                    height: elRect.height,
-                });
-            }, true);
-
-            iframeDoc.addEventListener('click', async function(e) {
-                if (!activeTarget) return;
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                await captureElement(activeTarget, activeWin);
-            }, true);
-        }).catch(() => {});
-    }
-
-    function scanIframes() {
-        document.querySelectorAll('iframe').forEach(iframe => {
-            setupIframe(iframe);
-            // Also retry when iframe navigates or loads new content
-            if (!iframe.__loupeLoadListener) {
-                iframe.__loupeLoadListener = true;
-                iframe.addEventListener('load', () => {
-                    iframe.__loupeReady = false;
-                    setupIframe(iframe);
-                });
-            }
-        });
-    }
-
-    scanIframes();
-
-    const observer = new MutationObserver(scanIframes);
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    // Storybook lazy-loads its iframe; poll until we find and inject into it
-    const poll = setInterval(() => {
-        scanIframes();
-        const injected = document.querySelector('iframe[__loupeReady]') ||
-            [...document.querySelectorAll('iframe')].some(f => f.__loupeReady);
-        if (injected) clearInterval(poll);
-    }, 1000);
 })();
 "#
     .to_string()
+}
+
+fn deactivate_picker_script() -> &'static str {
+    r#"
+(function() {
+    window.__loupePickerActive = false;
+    const overlay = document.getElementById('__loupe_overlay');
+    if (overlay) overlay.remove();
+    // Remove all loupe elements
+    document.querySelectorAll('[style*="2147483647"]').forEach(el => {
+        if (el.id === '__loupe_overlay' || el.textContent === 'Click to enter iframe') el.remove();
+    });
+    // Reload page to remove event listeners cleanly
+    window.location.reload();
+})();
+"#
 }
 
 // --- Tauri Commands ---
@@ -249,26 +203,38 @@ async fn open_browser(app: AppHandle, url: String) -> Result<(), String> {
         let _ = existing.close();
     }
 
-    let script = picker_script();
-
     tauri::WebviewWindowBuilder::new(
         &app,
         "browse",
         tauri::WebviewUrl::External(url.parse().map_err(|e| format!("{e}"))?),
     )
-    .title("Loupe Browser — click any element to capture")
+    .title("Loupe Browser")
     .inner_size(1200.0, 800.0)
-    .on_page_load(move |webview, payload| {
-        if matches!(
-            payload.event(),
-            tauri::webview::PageLoadEvent::Finished
-        ) {
-            let _ = webview.eval(&script);
-        }
-    })
     .build()
     .map_err(|e| format!("{e}"))?;
 
+    Ok(())
+}
+
+#[tauri::command]
+async fn start_capture(app: AppHandle) -> Result<(), String> {
+    let webview = app
+        .get_webview_window("browse")
+        .ok_or("Browser window is not open")?;
+    webview
+        .eval(&picker_script())
+        .map_err(|e| format!("{e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn stop_capture(app: AppHandle) -> Result<(), String> {
+    let webview = app
+        .get_webview_window("browse")
+        .ok_or("Browser window is not open")?;
+    webview
+        .eval(deactivate_picker_script())
+        .map_err(|e| format!("{e}"))?;
     Ok(())
 }
 
@@ -303,6 +269,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_browser,
             close_browser,
+            start_capture,
+            stop_capture,
             save_image
         ])
         .setup(|app| {

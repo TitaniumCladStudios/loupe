@@ -6,6 +6,7 @@
 
   let urlInput = $state(app.lastUrl);
   let loading = $state(false);
+  let capturing = $state(false);
 
   onMount(() => {
     const unlisten = listen('web-capture', (event) => {
@@ -17,6 +18,7 @@
   async function handleOpen() {
     if (!urlInput.trim()) return;
     loading = true;
+    capturing = false;
     try {
       setLastUrl(urlInput.trim());
       await invoke('open_browser', { url: urlInput.trim() });
@@ -31,8 +33,23 @@
     try {
       await invoke('close_browser');
       app.browserOpen = false;
+      capturing = false;
     } catch (e) {
       console.error('Failed to close browser:', e);
+    }
+  }
+
+  async function toggleCapture() {
+    try {
+      if (capturing) {
+        await invoke('stop_capture');
+        capturing = false;
+      } else {
+        await invoke('start_capture');
+        capturing = true;
+      }
+    } catch (e) {
+      console.error('Capture toggle error:', e);
     }
   }
 
@@ -51,11 +68,19 @@
       type="text"
       bind:value={urlInput}
       onkeydown={handleKeydown}
-      placeholder="Enter URL (e.g. http://localhost:3000)"
+      placeholder="Enter URL (e.g. http://localhost:6006)"
       class="url-input"
     />
     {#if app.browserOpen}
       <button class="btn btn-secondary" onclick={handleClose}>Close</button>
+      <button
+        class="btn"
+        class:btn-capture-active={capturing}
+        class:btn-capture={!capturing}
+        onclick={toggleCapture}
+      >
+        {capturing ? 'Stop Capture' : 'Start Capture'}
+      </button>
     {/if}
     <button class="btn btn-primary" onclick={handleOpen} disabled={loading || !urlInput.trim()}>
       {loading ? 'Opening...' : app.browserOpen ? 'Reload' : 'Open Browser'}
@@ -77,10 +102,13 @@
         </div>
         {#if !app.browserOpen}
           <h2>Capture a web element</h2>
-          <p>Enter a URL above and click <strong>Open Browser</strong>. A browser window will open with element capture enabled — hover to highlight, click to capture.</p>
-        {:else}
+          <p>Enter a URL above and click <strong>Open Browser</strong> to open a browser window. Browse to the page you want, then click <strong>Start Capture</strong> to enable element selection.</p>
+        {:else if !capturing}
           <h2>Browser is open</h2>
-          <p>Hover over any element to highlight it, then <strong>click to capture</strong>. The captured image will appear here.</p>
+          <p>Navigate to the element you want to capture, then click <strong>Start Capture</strong> above. If the element is inside an iframe, click the iframe first to navigate into it.</p>
+        {:else}
+          <h2>Capture mode active</h2>
+          <p>Hover over any element to highlight it, then <strong>click to capture</strong>. If you see an iframe, clicking it will navigate into it so you can capture elements inside.</p>
           <div class="status pulse">
             <span class="dot"></span>
             Waiting for capture...
@@ -113,10 +141,12 @@
     display: flex;
     gap: 8px;
     margin-bottom: 16px;
+    flex-wrap: wrap;
   }
 
   .url-input {
     flex: 1;
+    min-width: 200px;
     padding: 8px 12px;
     font-size: 14px;
     border: 1px solid #d1d5db;
@@ -165,6 +195,30 @@
     background: #e5e7eb;
   }
 
+  .btn-capture {
+    background: #f59e0b;
+    color: #fff;
+  }
+
+  .btn-capture:hover {
+    background: #d97706;
+  }
+
+  .btn-capture-active {
+    background: #ef4444;
+    color: #fff;
+    animation: capture-pulse 2s ease-in-out infinite;
+  }
+
+  .btn-capture-active:hover {
+    background: #dc2626;
+  }
+
+  @keyframes capture-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+  }
+
   .content {
     flex: 1;
     display: flex;
@@ -193,7 +247,8 @@
   .empty-state p {
     font-size: 14px;
     margin: 0 0 20px;
-    max-width: 380px;
+    max-width: 420px;
+    line-height: 1.5;
   }
 
   .status {
