@@ -1,10 +1,20 @@
 <script>
   import { app } from '$lib/state.svelte.js';
+  import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
+  import { onMount } from 'svelte';
   import TabNav from '$lib/components/TabNav.svelte';
   import FigmaTab from '$lib/components/FigmaTab.svelte';
   import WebTab from '$lib/components/WebTab.svelte';
   import CompareTab from '$lib/components/CompareTab.svelte';
   import ResultTab from '$lib/components/ResultTab.svelte';
+
+  onMount(() => {
+    const unlisten = listen('menu-open-output-dir', () => {
+      invoke('open_output_dir', { path: app.outputDir || '.' });
+    });
+    return () => unlisten.then(fn => fn());
+  });
 </script>
 
 <div class="app">

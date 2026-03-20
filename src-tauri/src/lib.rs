@@ -1,6 +1,7 @@
 use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use base64::Engine;
 use serde::Deserialize;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager};
 use tower_http::cors::CorsLayer;
 
@@ -404,6 +405,16 @@ async fn close_browser(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn open_output_dir(path: String) -> Result<(), String> {
+    if path.is_empty() {
+        return Err("No output directory set".into());
+    }
+    tauri_plugin_opener::open_path(path, None::<&str>)
+        .map_err(|e| format!("{e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn save_image(path: String, data: String) -> Result<(), String> {
     let base64_data = data
         .strip_prefix("data:image/png;base64,")
@@ -428,10 +439,50 @@ pub fn run() {
             close_browser,
             start_capture,
             stop_capture,
-            save_image
+            save_image,
+            open_output_dir
         ])
         .setup(|app| {
             start_server(app.handle().clone());
+
+            // --- Menus ---
+            let open_output_dir = MenuItemBuilder::with_id("open_output_dir", "Open Output Folder")
+                .build(app)?;
+            let file_menu = SubmenuBuilder::new(app, "File")
+                .item(&open_output_dir)
+                .separator()
+                .quit()
+                .build()?;
+
+            let github_readme = MenuItemBuilder::with_id("github_readme", "Loupe on GitHub")
+                .build(app)?;
+            let help_menu = SubmenuBuilder::new(app, "Help")
+                .item(&github_readme)
+                .build()?;
+
+            let menu = MenuBuilder::new(app)
+                .item(&file_menu)
+                .item(&help_menu)
+                .build()?;
+
+            app.set_menu(menu)?;
+
+            app.on_menu_event(move |app, event| {
+                match event.id().as_ref() {
+                    "open_output_dir" => {
+                        // Emit event to frontend to get the output dir from state
+                        let _ = app.emit("menu-open-output-dir", ());
+                    }
+                    "github_readme" => {
+                        let _ = tauri_plugin_opener::open_url(
+                            "https://github.com/TitaniumCladStudios/loupe#readme",
+                            None::<&str>,
+                        );
+                    }
+                    _ => {}
+                }
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())
