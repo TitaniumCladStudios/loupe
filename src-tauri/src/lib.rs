@@ -50,103 +50,259 @@ fn start_server(app: AppHandle) {
     });
 }
 
-// --- Picker injection script ---
+// --- Inspector injection script ---
 
 fn picker_script() -> String {
     r#"
-(async function() {
-    if (window.__loupePickerActive) return;
-    window.__loupePickerActive = true;
+(function() {
+    if (window.__loupeInspectorActive) return;
+    window.__loupeInspectorActive = true;
 
-    // Load html2canvas
-    if (!window.html2canvas) {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-        document.head.appendChild(s);
-        await new Promise((resolve, reject) => {
-            s.onload = resolve;
-            s.onerror = reject;
+    /* ── Highlight overlay ── */
+    const overlay = document.createElement('div');
+    overlay.id = '__loupe_overlay';
+    overlay.style.cssText = 'position:fixed;pointer-events:none;border:2px solid #6366f1;background:rgba(99,102,241,0.1);z-index:2147483646;display:none;transition:all 0.05s;';
+    document.body.appendChild(overlay);
+
+    /* ── Toast ── */
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:300px;left:50%;transform:translateX(-50%);padding:8px 16px;border-radius:6px;font:13px/1.4 system-ui,sans-serif;z-index:2147483647;pointer-events:none;opacity:0;transition:opacity 0.3s;';
+    document.body.appendChild(toast);
+    function showToast(msg, err) {
+        toast.textContent = msg;
+        toast.style.background = err ? '#ef4444' : '#22c55e';
+        toast.style.color = '#fff';
+        toast.style.opacity = '1';
+        setTimeout(() => toast.style.opacity = '0', 3000);
+    }
+
+    /* ── Panel ── */
+    const panel = document.createElement('div');
+    panel.id = '__loupe_inspector';
+    panel.style.cssText = `
+        position:fixed;bottom:0;left:0;right:0;height:280px;
+        background:#1e1e2e;color:#cdd6f4;
+        font-family:'SF Mono',Monaco,Consolas,'Liberation Mono',monospace;font-size:12px;
+        z-index:2147483645;display:flex;flex-direction:column;
+        border-top:2px solid #6366f1;box-shadow:0 -4px 20px rgba(0,0,0,0.3);
+    `;
+
+    /* resize handle */
+    const resizer = document.createElement('div');
+    resizer.style.cssText = 'height:6px;cursor:ns-resize;background:transparent;position:absolute;top:-3px;left:0;right:0;z-index:1;';
+    panel.appendChild(resizer);
+    let resizing = false;
+    resizer.addEventListener('mousedown', (e) => { resizing = true; e.preventDefault(); });
+    document.addEventListener('mousemove', (e) => {
+        if (!resizing) return;
+        const h = window.innerHeight - e.clientY;
+        panel.style.height = Math.max(120, Math.min(h, window.innerHeight - 60)) + 'px';
+    });
+    document.addEventListener('mouseup', () => { resizing = false; });
+
+    /* header */
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:#181825;border-bottom:1px solid #313244;user-select:none;flex-shrink:0;';
+    header.innerHTML = `
+        <span style="font-weight:600;color:#cba6f7;">Loupe Inspector</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <button id="__loupe_refresh" style="padding:3px 10px;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;font-size:11px;cursor:pointer;" title="Refresh DOM tree">Refresh</button>
+            <button id="__loupe_capture_btn" style="padding:3px 12px;background:#6366f1;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:600;opacity:0.5;" disabled>Capture Selected</button>
+        </div>
+    `;
+    panel.appendChild(header);
+
+    /* tree container */
+    const treeWrap = document.createElement('div');
+    treeWrap.style.cssText = 'flex:1;overflow:auto;padding:4px 0;';
+    panel.appendChild(treeWrap);
+
+    document.body.appendChild(panel);
+
+    const captureBtn = panel.querySelector('#__loupe_capture_btn');
+    const refreshBtn = panel.querySelector('#__loupe_refresh');
+
+    let selectedEl = null;
+    let selectedWin = null;
+    let selectedRow = null;
+    let selectedOffsets = [];
+
+    /* ── Highlight helper ── */
+    function highlight(el, offsets) {
+        if (!el) { overlay.style.display = 'none'; return; }
+        const r = el.getBoundingClientRect();
+        let top = r.top, left = r.left;
+        for (const o of offsets) { top += o.top; left += o.left; }
+        overlay.style.display = 'block';
+        overlay.style.top = top + 'px';
+        overlay.style.left = left + 'px';
+        overlay.style.width = r.width + 'px';
+        overlay.style.height = r.height + 'px';
+    }
+
+    function selectNode(el, win, row, offsets) {
+        if (selectedRow) selectedRow.style.background = '';
+        selectedEl = el;
+        selectedWin = win;
+        selectedRow = row;
+        selectedOffsets = offsets;
+        row.style.background = '#313244';
+        captureBtn.disabled = false;
+        captureBtn.style.opacity = '1';
+        highlight(el, offsets);
+    }
+
+    /* ── Format element tag ── */
+    function fmtTag(el) {
+        const tag = el.tagName.toLowerCase();
+        let s = '<span style="color:#89b4fa">&lt;' + tag + '</span>';
+        if (el.id) s += '<span style="color:#fab387"> #' + el.id + '</span>';
+        if (el.className && typeof el.className === 'string') {
+            const c = el.className.trim();
+            if (c) s += '<span style="color:#a6e3a1"> .' + c.split(/\s+/).join('.') + '</span>';
+        }
+        // Show src for images/iframes
+        if ((tag === 'img' || tag === 'iframe') && el.src) {
+            const src = el.src.length > 60 ? el.src.slice(0, 57) + '...' : el.src;
+            s += '<span style="color:#585b70"> src="' + src + '"</span>';
+        }
+        s += '<span style="color:#89b4fa">&gt;</span>';
+        // Show text content preview for leaf nodes
+        if (!el.children.length && el.textContent) {
+            const txt = el.textContent.trim();
+            if (txt && txt.length < 60) {
+                s += '<span style="color:#585b70;font-style:italic;"> ' + txt.replace(/</g,'&lt;') + '</span>';
+            }
+        }
+        return s;
+    }
+
+    /* ── Get visible children ── */
+    function visibleChildren(el) {
+        return Array.from(el.children).filter(c =>
+            c.id !== '__loupe_inspector' &&
+            c.id !== '__loupe_overlay' &&
+            c !== toast && c !== overlay && c !== panel
+        );
+    }
+
+    /* ── Build tree node ── */
+    function buildNode(el, depth, parent, win, offsets) {
+        const kids = visibleChildren(el);
+        const isIframe = el.tagName === 'IFRAME';
+        let iframeDoc = null;
+
+        if (isIframe) {
+            try {
+                iframeDoc = el.contentDocument || (el.contentWindow && el.contentWindow.document);
+                if (iframeDoc && !iframeDoc.body) iframeDoc = null;
+            } catch(e) { iframeDoc = null; }
+        }
+
+        const expandable = kids.length > 0 || (iframeDoc && iframeDoc.body.children.length > 0);
+
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;padding:1px 8px 1px ' + (12 + depth * 16) + 'px;cursor:pointer;white-space:nowrap;border-radius:2px;min-height:22px;';
+
+        const arrow = document.createElement('span');
+        arrow.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex-shrink:0;color:#585b70;font-size:9px;user-select:none;';
+        arrow.textContent = expandable ? '▶' : '';
+
+        const label = document.createElement('span');
+        label.innerHTML = fmtTag(el);
+        if (isIframe && iframeDoc) {
+            label.innerHTML += '<span style="color:#f38ba8;font-size:10px;margin-left:6px;">IFRAME</span>';
+        } else if (isIframe) {
+            label.innerHTML += '<span style="color:#585b70;font-size:10px;margin-left:6px;">iframe (cross-origin)</span>';
+        }
+
+        row.appendChild(arrow);
+        row.appendChild(label);
+        parent.appendChild(row);
+
+        const childBox = document.createElement('div');
+        childBox.style.display = 'none';
+        parent.appendChild(childBox);
+
+        let expanded = false;
+        let childrenBuilt = false;
+
+        row.addEventListener('mouseenter', () => {
+            if (row !== selectedRow) row.style.background = '#262637';
+            highlight(el, offsets);
+        });
+        row.addEventListener('mouseleave', () => {
+            if (row !== selectedRow) row.style.background = '';
+            if (selectedEl) highlight(selectedEl, selectedOffsets);
+            else overlay.style.display = 'none';
+        });
+
+        arrow.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!expandable) return;
+            expanded = !expanded;
+            arrow.textContent = expanded ? '▼' : '▶';
+            childBox.style.display = expanded ? '' : 'none';
+
+            if (expanded && !childrenBuilt) {
+                childrenBuilt = true;
+                // iframe children first
+                if (isIframe && iframeDoc) {
+                    const iRect = el.getBoundingClientRect();
+                    const nestedOffsets = [...offsets, { top: iRect.top, left: iRect.left }];
+                    visibleChildren(iframeDoc.body).forEach(child => {
+                        buildNode(child, depth + 1, childBox, el.contentWindow, nestedOffsets);
+                    });
+                }
+                kids.forEach(child => {
+                    buildNode(child, depth + 1, childBox, win, offsets);
+                });
+            }
+        });
+
+        row.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectNode(el, win, row, offsets);
         });
     }
 
-    const overlay = document.createElement('div');
-    overlay.id = '__loupe_overlay';
-    overlay.style.cssText = 'position:fixed;pointer-events:none;border:2px solid #6366f1;background:rgba(99,102,241,0.08);z-index:2147483647;transition:all 0.05s ease;display:none;';
-    document.body.appendChild(overlay);
+    /* ── Build tree ── */
+    function buildTree() {
+        treeWrap.innerHTML = '';
+        selectedEl = null;
+        selectedWin = null;
+        selectedRow = null;
+        captureBtn.disabled = true;
+        captureBtn.style.opacity = '0.5';
+        overlay.style.display = 'none';
 
-    // Label shown on iframes
-    const iframeLabel = document.createElement('div');
-    iframeLabel.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483647;background:#6366f1;color:#fff;font:12px/1 sans-serif;padding:4px 8px;border-radius:4px;display:none;white-space:nowrap;';
-    iframeLabel.textContent = 'Click to enter iframe';
-    document.body.appendChild(iframeLabel);
-
-    // Toast for feedback
-    const toast = document.createElement('div');
-    toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:8px;font:14px sans-serif;z-index:2147483647;pointer-events:none;opacity:0;transition:opacity 0.3s;';
-    document.body.appendChild(toast);
-
-    function showToast(msg, isError) {
-        toast.textContent = msg;
-        toast.style.background = isError ? '#ef4444' : '#22c55e';
-        toast.style.color = '#fff';
-        toast.style.opacity = '1';
-        setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+        visibleChildren(document.body).forEach(child => {
+            buildNode(child, 0, treeWrap, window, []);
+        });
     }
 
-    let hoveredEl = null;
+    buildTree();
+    refreshBtn.addEventListener('click', buildTree);
 
-    document.addEventListener('mousemove', function(e) {
-        hoveredEl = e.target;
-
-        if (hoveredEl === overlay || hoveredEl === document.body || hoveredEl === document.documentElement) {
-            overlay.style.display = 'none';
-            iframeLabel.style.display = 'none';
-            return;
-        }
-
-        const rect = hoveredEl.getBoundingClientRect();
-        overlay.style.display = 'block';
-        overlay.style.top = rect.top + 'px';
-        overlay.style.left = rect.left + 'px';
-        overlay.style.width = rect.width + 'px';
-        overlay.style.height = rect.height + 'px';
-
-        // Show label hint on iframes
-        if (hoveredEl.tagName === 'IFRAME') {
-            iframeLabel.style.display = 'block';
-            iframeLabel.style.top = (rect.top + 8) + 'px';
-            iframeLabel.style.left = (rect.left + 8) + 'px';
-            overlay.style.border = '2px dashed #6366f1';
-        } else {
-            iframeLabel.style.display = 'none';
-            overlay.style.border = '2px solid #6366f1';
-        }
-    }, true);
-
-    document.addEventListener('click', async function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        if (!hoveredEl) return;
-
-        // Clicking an iframe navigates into it
-        if (hoveredEl.tagName === 'IFRAME') {
-            const src = hoveredEl.src || hoveredEl.getAttribute('src');
-            if (src) {
-                showToast('Navigating into iframe...', false);
-                window.location.href = src;
-            } else {
-                showToast('Iframe has no src URL', true);
-            }
-            return;
-        }
-
-        overlay.style.border = '2px solid #22c55e';
-        overlay.style.background = 'rgba(34,197,94,0.12)';
+    /* ── Capture ── */
+    captureBtn.addEventListener('click', async () => {
+        if (!selectedEl) return;
+        captureBtn.disabled = true;
+        captureBtn.textContent = 'Capturing...';
 
         try {
-            showToast('Capturing...', false);
-            const canvas = await html2canvas(hoveredEl, {
+            const targetWin = selectedWin || window;
+
+            // Load html2canvas in the correct window context
+            if (!targetWin.html2canvas) {
+                const doc = targetWin.document;
+                const s = doc.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                (doc.head || doc.documentElement).appendChild(s);
+                await new Promise((r, j) => { s.onload = r; s.onerror = j; });
+            }
+
+            const canvas = await targetWin.html2canvas(selectedEl, {
                 useCORS: true,
                 allowTaint: true,
                 backgroundColor: null,
@@ -158,21 +314,20 @@ fn picker_script() -> String {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image: dataUrl })
             });
+
             if (resp.ok) {
                 showToast('Captured! Check the Loupe app.', false);
             } else {
                 showToast('Server error: ' + resp.status, true);
             }
         } catch(err) {
-            showToast('Capture error: ' + err.message, true);
+            showToast('Error: ' + err.message, true);
             console.error('Loupe capture error:', err);
         }
 
-        setTimeout(() => {
-            overlay.style.border = '2px solid #6366f1';
-            overlay.style.background = 'rgba(99,102,241,0.08)';
-        }, 600);
-    }, true);
+        captureBtn.disabled = false;
+        captureBtn.textContent = 'Capture Selected';
+    });
 })();
 "#
     .to_string()
@@ -181,15 +336,11 @@ fn picker_script() -> String {
 fn deactivate_picker_script() -> &'static str {
     r#"
 (function() {
-    window.__loupePickerActive = false;
-    const overlay = document.getElementById('__loupe_overlay');
-    if (overlay) overlay.remove();
-    // Remove all loupe elements
-    document.querySelectorAll('[style*="2147483647"]').forEach(el => {
-        if (el.id === '__loupe_overlay' || el.textContent === 'Click to enter iframe') el.remove();
-    });
-    // Reload page to remove event listeners cleanly
-    window.location.reload();
+    window.__loupeInspectorActive = false;
+    const el = document.getElementById('__loupe_inspector');
+    if (el) el.remove();
+    const ov = document.getElementById('__loupe_overlay');
+    if (ov) ov.remove();
 })();
 "#
 }
