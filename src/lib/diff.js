@@ -9,9 +9,51 @@ function loadImage(src) {
   });
 }
 
+function trimWhitespace(img) {
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  // Find bounds of non-white/non-transparent content
+  let top = h, left = w, bottom = 0, right = 0;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+      // Skip fully transparent or near-white pixels
+      if (a < 10) continue;
+      if (r > 250 && g > 250 && b > 250) continue;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+      if (x < left) left = x;
+      if (x > right) right = x;
+    }
+  }
+
+  // If image is entirely white/transparent, return as-is
+  if (bottom < top || right < left) return img;
+
+  const trimmed = document.createElement('canvas');
+  trimmed.width = right - left + 1;
+  trimmed.height = bottom - top + 1;
+  trimmed.getContext('2d').drawImage(
+    canvas,
+    left, top, trimmed.width, trimmed.height,
+    0, 0, trimmed.width, trimmed.height
+  );
+  return trimmed;
+}
+
 export async function runDiff(figmaBase64, webBase64, thresholdPercent) {
-  const figmaImg = await loadImage(figmaBase64);
-  const webImg = await loadImage(webBase64);
+  const figmaImg = trimWhitespace(await loadImage(figmaBase64));
+  const webImg = trimWhitespace(await loadImage(webBase64));
 
   // Use the Figma frame as the target size (source of truth)
   const targetWidth = figmaImg.width;
