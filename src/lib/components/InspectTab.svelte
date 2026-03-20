@@ -14,10 +14,18 @@
     expandedCats[key] = !expandedCats[key];
   }
 
-  function matchIcon(match) {
-    if (match === true) return 'match';
-    if (match === false) return 'mismatch';
-    return 'unknown';
+  function expandAll() {
+    if (!comparison) return;
+    for (const cat of comparison.categories) {
+      expandedCats[cat.key] = true;
+    }
+  }
+
+  function collapseAll() {
+    if (!comparison) return;
+    for (const cat of comparison.categories) {
+      expandedCats[cat.key] = false;
+    }
   }
 </script>
 
@@ -62,6 +70,10 @@
       <span class="summary-stat">
         <strong>{comparison.totalMatched}</strong> / {comparison.totalProps} properties match
       </span>
+      <div class="summary-actions">
+        <button class="btn-toggle" onclick={expandAll} title="Expand all categories">Expand All</button>
+        <button class="btn-toggle" onclick={collapseAll} title="Collapse all categories">Collapse All</button>
+      </div>
       <span class="summary-pct" class:good={comparison.totalMatched / comparison.totalProps >= 0.8} class:warn={comparison.totalMatched / comparison.totalProps >= 0.5 && comparison.totalMatched / comparison.totalProps < 0.8} class:bad={comparison.totalMatched / comparison.totalProps < 0.5}>
         {Math.round(comparison.totalMatched / comparison.totalProps * 100)}%
       </span>
@@ -71,7 +83,7 @@
       {#each comparison.categories as cat}
         <div class="category">
           <button class="cat-header" onclick={() => toggleCat(cat.key)}>
-            <span class="cat-arrow">{expandedCats[cat.key] === false ? '▶' : '▼'}</span>
+            <span class="cat-arrow">{expandedCats[cat.key] ? '▼' : '▶'}</span>
             <span class="cat-label">{cat.label}</span>
             <span class="cat-summary">
               <span class="cat-count">{cat.matched}/{cat.total}</span>
@@ -83,7 +95,7 @@
             </span>
           </button>
 
-          {#if expandedCats[cat.key] !== false}
+          {#if expandedCats[cat.key]}
             <div class="cat-table">
               <div class="table-header">
                 <span class="col-prop">Property</span>
@@ -195,6 +207,27 @@
     font-weight: 700;
     border-radius: 6px;
     padding: 2px 10px;
+  }
+
+  .summary-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .btn-toggle {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    color: #6b7280;
+    cursor: pointer;
+  }
+
+  .btn-toggle:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
   }
 
   .summary-pct.good { color: #16a34a; background: #f0fdf4; }
@@ -347,6 +380,8 @@
     .empty-state .icon { color: #4b5563; }
     .btn-link { border-color: #818cf8; color: #818cf8; }
     .summary-bar { background: #1f2937; }
+    .btn-toggle { background: #374151; border-color: #4b5563; color: #9ca3af; }
+    .btn-toggle:hover { background: #4b5563; }
     .summary-stat { color: #d1d5db; }
     .summary-pct.good { color: #4ade80; background: #052e16; }
     .summary-pct.warn { color: #fbbf24; background: #422006; }

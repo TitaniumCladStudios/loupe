@@ -27,32 +27,52 @@ function extractProperties(node) {
   // Detect if this is a text node
   props.isText = node.type === 'TEXT';
 
-  // Typography (text nodes)
+  // Typography — extract from this node if TEXT, or from the first child TEXT node
+  var textNode = null;
   if (node.type === 'TEXT') {
-    props.fontSize = node.fontSize === figma.mixed ? 'mixed' : node.fontSize;
+    textNode = node;
+  } else if ('findOne' in node) {
+    textNode = node.findOne(function(n) { return n.type === 'TEXT'; });
+  }
 
-    if (node.fontName === figma.mixed) {
+  if (textNode) {
+    props.fontSize = textNode.fontSize === figma.mixed ? 'mixed' : textNode.fontSize;
+
+    if (textNode.fontName === figma.mixed) {
       props.fontFamily = 'mixed';
       props.fontStyle = 'mixed';
-    } else if (node.fontName) {
-      props.fontFamily = node.fontName.family;
-      props.fontStyle = node.fontName.style;
+    } else if (textNode.fontName) {
+      props.fontFamily = textNode.fontName.family;
+      props.fontStyle = textNode.fontName.style;
     }
 
-    if (node.lineHeight === figma.mixed) {
+    if (textNode.lineHeight === figma.mixed) {
       props.lineHeight = 'mixed';
-    } else if (node.lineHeight) {
-      props.lineHeight = node.lineHeight;
+    } else if (textNode.lineHeight) {
+      props.lineHeight = textNode.lineHeight;
     }
 
-    if (node.letterSpacing === figma.mixed) {
+    if (textNode.letterSpacing === figma.mixed) {
       props.letterSpacing = 'mixed';
-    } else if (node.letterSpacing) {
-      props.letterSpacing = node.letterSpacing;
+    } else if (textNode.letterSpacing) {
+      props.letterSpacing = textNode.letterSpacing;
     }
 
-    if (node.textAlignHorizontal) {
-      props.textAlign = node.textAlignHorizontal;
+    if (textNode.textAlignHorizontal) {
+      props.textAlign = textNode.textAlignHorizontal;
+    }
+
+    // If we pulled typography from a child, also grab its fill as text color
+    if (textNode !== node && 'fills' in textNode && textNode.fills !== figma.mixed) {
+      var textFill = textNode.fills.filter(function(f) { return f.type === 'SOLID' && f.visible !== false; })[0];
+      if (textFill) {
+        props.textColor = {
+          r: textFill.color.r,
+          g: textFill.color.g,
+          b: textFill.color.b,
+          opacity: (textFill.opacity != null ? textFill.opacity : 1)
+        };
+      }
     }
   }
 

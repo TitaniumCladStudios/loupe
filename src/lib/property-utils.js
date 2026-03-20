@@ -100,6 +100,10 @@ export function normalizeFigmaProps(raw) {
       p[key] = 'gradient (not compared)';
     }
   }
+  // Text color extracted from child text node
+  if (raw.textColor && !p['color']) {
+    p['color'] = figmaColorToCSS(raw.textColor, raw.textColor.opacity ?? 1);
+  }
   if (raw.opacity != null) p['opacity'] = String(parseFloat(raw.opacity.toFixed(2)));
 
   // Borders
@@ -248,7 +252,11 @@ function valuesMatch(prop, a, b) {
 
   // Numeric px values
   if (a.endsWith('px') && b.endsWith('px')) {
-    return Math.abs(parseFloat(a) - parseFloat(b)) <= 1;
+    const diff = Math.abs(parseFloat(a) - parseFloat(b));
+    // Strict match for border-width (1px vs 2px should flag)
+    // Sub-pixel tolerance for dimensions (15.98px vs 16px should pass)
+    const tolerance = prop.includes('border-width') ? 0.1 : 0.5;
+    return diff <= tolerance;
   }
 
   // Numeric plain values (opacity, font-weight)
