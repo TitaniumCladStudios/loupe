@@ -1,8 +1,12 @@
 {
   "name": "Loupe",
-  "id": "1616845999417617820",
+  "id": "1616846978663270818",
   "api": "1.0.0",
   "editorType": ["dev"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  },
   "main": "code.js",
   "ui": "ui.html",
   "capabilities": ["inspect"],
