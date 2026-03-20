@@ -307,21 +307,17 @@ fn picker_script() -> String {
         try {
             const targetWin = selectedWin || window;
 
-            // Load html2canvas in the correct window context
-            if (!targetWin.html2canvas) {
+            // Load dom-to-image-more in the correct window context
+            // Uses browser's native CSS renderer — supports oklch, lab, etc.
+            if (!targetWin.domtoimage) {
                 const doc = targetWin.document;
                 const s = doc.createElement('script');
-                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                s.src = 'https://cdn.jsdelivr.net/npm/dom-to-image-more@3.4.5/dist/dom-to-image-more.min.js';
                 (doc.head || doc.documentElement).appendChild(s);
                 await new Promise((r, j) => { s.onload = r; s.onerror = j; });
             }
 
-            const canvas = await targetWin.html2canvas(selectedEl, {
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: null,
-            });
-            const dataUrl = canvas.toDataURL('image/png');
+            const dataUrl = await targetWin.domtoimage.toPng(selectedEl);
 
             const resp = await fetch('http://localhost:7700/capture', {
                 method: 'POST',
