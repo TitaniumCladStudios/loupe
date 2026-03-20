@@ -22,6 +22,8 @@ export const app = $state({
   viewMode: 'heatmap',
   overlayOpacity: 0.5,
   browserOpen: false,
+  figmaProperties: null,
+  webProperties: null,
 });
 
 export async function initOutputDir() {
@@ -54,10 +56,12 @@ export function setOutputDir(dir) {
 
 export function clearFigma() {
   app.figmaImage = null;
+  app.figmaProperties = null;
 }
 
 export function clearWebCapture() {
   app.webCapture = null;
+  app.webProperties = null;
 }
 
 export function clearDiff() {
@@ -69,5 +73,6 @@ export function isTabComplete(index) {
   if (index === 1) return app.webCapture !== null;
   if (index === 2) return app.diffResult !== null;
   if (index === 3) return app.diffResult !== null;
+  if (index === 4) return app.figmaProperties !== null && app.webProperties !== null;
   return false;
 }

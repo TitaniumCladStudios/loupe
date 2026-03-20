@@ -15,6 +15,7 @@ struct ServerState {
 #[derive(Deserialize)]
 struct ImagePayload {
     image: String,
+    properties: Option<serde_json::Value>,
 }
 
 async fn handle_figma(
@@ -22,6 +23,9 @@ async fn handle_figma(
     Json(payload): Json<ImagePayload>,
 ) -> StatusCode {
     let _ = state.app.emit("figma-image", &payload.image);
+    if let Some(props) = &payload.properties {
+        let _ = state.app.emit("figma-properties", props);
+    }
     StatusCode::OK
 }
 
@@ -30,6 +34,9 @@ async fn handle_capture(
     Json(payload): Json<ImagePayload>,
 ) -> StatusCode {
     let _ = state.app.emit("web-capture", &payload.image);
+    if let Some(props) = &payload.properties {
+        let _ = state.app.emit("web-properties", props);
+    }
     StatusCode::OK
 }
 
@@ -316,10 +323,31 @@ fn picker_script() -> String {
                 style: { margin: '0' },
             });
 
+            // Extract computed CSS properties
+            const cs = targetWin.getComputedStyle(selectedEl);
+            const properties = {
+                'width': cs.width, 'height': cs.height,
+                'font-family': cs.fontFamily, 'font-size': cs.fontSize,
+                'font-weight': cs.fontWeight, 'line-height': cs.lineHeight,
+                'letter-spacing': cs.letterSpacing, 'text-align': cs.textAlign,
+                'color': cs.color, 'background-color': cs.backgroundColor,
+                'opacity': cs.opacity,
+                'border-top-width': cs.borderTopWidth, 'border-right-width': cs.borderRightWidth,
+                'border-bottom-width': cs.borderBottomWidth, 'border-left-width': cs.borderLeftWidth,
+                'border-top-color': cs.borderTopColor, 'border-right-color': cs.borderRightColor,
+                'border-bottom-color': cs.borderBottomColor, 'border-left-color': cs.borderLeftColor,
+                'border-top-left-radius': cs.borderTopLeftRadius, 'border-top-right-radius': cs.borderTopRightRadius,
+                'border-bottom-right-radius': cs.borderBottomRightRadius, 'border-bottom-left-radius': cs.borderBottomLeftRadius,
+                'padding-top': cs.paddingTop, 'padding-right': cs.paddingRight,
+                'padding-bottom': cs.paddingBottom, 'padding-left': cs.paddingLeft,
+                'gap': cs.gap, 'row-gap': cs.rowGap, 'column-gap': cs.columnGap,
+                'box-shadow': cs.boxShadow, 'filter': cs.filter,
+            };
+
             const resp = await fetch('http://localhost:7700/capture', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: dataUrl })
+                body: JSON.stringify({ image: dataUrl, properties: properties })
             });
 
             if (resp.ok) {

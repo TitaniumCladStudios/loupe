@@ -8,14 +8,26 @@
   import WebTab from '$lib/components/WebTab.svelte';
   import CompareTab from '$lib/components/CompareTab.svelte';
   import ResultTab from '$lib/components/ResultTab.svelte';
+  import InspectTab from '$lib/components/InspectTab.svelte';
 
   onMount(() => {
     initOutputDir();
 
-    const unlisten = listen('menu-open-output-dir', () => {
+    const unlistenMenu = listen('menu-open-output-dir', () => {
       invoke('open_output_dir', { path: app.outputDir || '.' });
     });
-    return () => unlisten.then(fn => fn());
+    const unlistenFigmaProps = listen('figma-properties', (event) => {
+      app.figmaProperties = event.payload;
+    });
+    const unlistenWebProps = listen('web-properties', (event) => {
+      app.webProperties = event.payload;
+    });
+
+    return () => {
+      unlistenMenu.then(fn => fn());
+      unlistenFigmaProps.then(fn => fn());
+      unlistenWebProps.then(fn => fn());
+    };
   });
 </script>
 
@@ -35,6 +47,8 @@
       <CompareTab />
     {:else if app.activeTab === 3}
       <ResultTab />
+    {:else if app.activeTab === 4}
+      <InspectTab />
     {/if}
   </main>
 </div>

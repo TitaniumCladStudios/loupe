@@ -1,12 +1,13 @@
 <script>
   import { app, isTabComplete } from '$lib/state.svelte.js';
 
-  const tabs = ['Figma', 'Web', 'Compare', 'Result'];
+  const tabs = ['Figma', 'Web', 'Compare', 'Result', 'Inspect'];
   const tabTips = [
     'Receive a design frame from Figma via the companion plugin',
     'Open a browser and capture a web element for comparison',
     'Configure and run a pixel-level diff between captures',
-    'View the comparison results as a heatmap, side by side, or overlay'
+    'View the comparison results as a heatmap, side by side, or overlay',
+    'Compare CSS properties between the Figma design and web implementation'
   ];
 </script>
 

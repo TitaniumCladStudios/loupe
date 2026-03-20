@@ -87,10 +87,13 @@
         const base64 = uint8ToBase64(bytes);
 
         try {
+          const body = { image: 'data:image/png;base64,' + base64 };
+          if (msg.properties) body.properties = msg.properties;
+
           const resp = await fetch('http://localhost:7700/figma', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: 'data:image/png;base64,' + base64 }),
+            body: JSON.stringify(body),
           });
 
           if (resp.ok) {
