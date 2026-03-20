@@ -5,7 +5,7 @@
   "editorType": ["dev"],
   "documentAccess": "dynamic-page",
   "networkAccess": {
-    "allowedDomains": ["*.localhost", "localhost"],
+    "allowedDomains": ["http://localhost:7700"],
     "reasoning": "Sends exported frame images to the Loupe desktop app running on localhost:7700"
   },
   "main": "code.js",
