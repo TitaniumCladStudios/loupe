@@ -19,7 +19,7 @@ function extractProperties(node) {
       .map(f => ({
         type: f.type,
         color: f.type === 'SOLID' ? { r: f.color.r, g: f.color.g, b: f.color.b } : null,
-        opacity: f.opacity ?? 1,
+        opacity: (f.opacity != null ? f.opacity : 1),
         visible: f.visible,
       }));
   }
@@ -63,7 +63,7 @@ function extractProperties(node) {
       .map(s => ({
         type: s.type,
         color: s.type === 'SOLID' ? { r: s.color.r, g: s.color.g, b: s.color.b } : null,
-        opacity: s.opacity ?? 1,
+        opacity: (s.opacity != null ? s.opacity : 1),
       }));
   }
   if ('strokeWeight' in node) {
@@ -75,10 +75,10 @@ function extractProperties(node) {
     if (node.cornerRadius === figma.mixed) {
       // Individual corners
       props.cornerRadii = [
-        node.topLeftRadius ?? 0,
-        node.topRightRadius ?? 0,
-        node.bottomRightRadius ?? 0,
-        node.bottomLeftRadius ?? 0,
+        (node.topLeftRadius || 0),
+        (node.topRightRadius || 0),
+        (node.bottomRightRadius || 0),
+        (node.bottomLeftRadius || 0),
       ];
     } else {
       props.cornerRadius = node.cornerRadius;
@@ -104,7 +104,7 @@ function extractProperties(node) {
         type: e.type,
         radius: e.radius,
         offset: e.offset ? { x: e.offset.x, y: e.offset.y } : null,
-        spread: e.spread ?? 0,
+        spread: (e.spread || 0),
         color: e.color ? { r: e.color.r, g: e.color.g, b: e.color.b, a: e.color.a } : null,
       }));
   }
