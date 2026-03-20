@@ -16,12 +16,31 @@ export const app = $state({
   diffResult: null,
   threshold: 10,
   outputDir: loadStored('outputDir', ''),
+  outputDirInitialized: false,
   outputFilename: 'diff-{timestamp}.png',
   lastUrl: loadStored('lastUrl', 'http://localhost:3000'),
   viewMode: 'heatmap',
   overlayOpacity: 0.5,
   browserOpen: false,
 });
+
+export async function initOutputDir() {
+  // Only set the default if the user hasn't explicitly chosen one
+  if (app.outputDir) {
+    app.outputDirInitialized = true;
+    return;
+  }
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const defaultDir = await invoke('get_default_output_dir');
+    app.outputDir = defaultDir;
+    store('outputDir', defaultDir);
+    app.outputDirInitialized = true;
+  } catch (e) {
+    console.error('Failed to get default output dir:', e);
+    app.outputDirInitialized = true;
+  }
+}
 
 export function setLastUrl(url) {
   app.lastUrl = url;

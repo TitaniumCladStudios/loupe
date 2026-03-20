@@ -405,10 +405,24 @@ async fn close_browser(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn get_default_output_dir() -> Result<String, String> {
+    let dir = dirs::picture_dir()
+        .or_else(dirs::home_dir)
+        .ok_or("Could not determine home directory")?
+        .join("Loupe");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{e}"))?;
+    dir.to_str()
+        .map(String::from)
+        .ok_or_else(|| "Invalid path".into())
+}
+
+#[tauri::command]
 async fn open_output_dir(path: String) -> Result<(), String> {
     if path.is_empty() {
         return Err("No output directory set".into());
     }
+    // Ensure the directory exists before opening
+    std::fs::create_dir_all(&path).map_err(|e| format!("{e}"))?;
     tauri_plugin_opener::open_path(path, None::<&str>)
         .map_err(|e| format!("{e}"))?;
     Ok(())
@@ -440,7 +454,8 @@ pub fn run() {
             start_capture,
             stop_capture,
             save_image,
-            open_output_dir
+            open_output_dir,
+            get_default_output_dir
         ])
         .setup(|app| {
             start_server(app.handle().clone());

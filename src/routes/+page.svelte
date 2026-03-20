@@ -1,5 +1,5 @@
 <script>
-  import { app } from '$lib/state.svelte.js';
+  import { app, initOutputDir } from '$lib/state.svelte.js';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { onMount } from 'svelte';
@@ -10,6 +10,8 @@
   import ResultTab from '$lib/components/ResultTab.svelte';
 
   onMount(() => {
+    initOutputDir();
+
     const unlisten = listen('menu-open-output-dir', () => {
       invoke('open_output_dir', { path: app.outputDir || '.' });
     });

@@ -21,3 +21,4 @@ axum = "0.8"
 tower-http = { version = "0.6", features = ["cors"] }
 tokio = { version = "1", features = ["net"] }
 base64 = "0.22"
+dirs = "6"
