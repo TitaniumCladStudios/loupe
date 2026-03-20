@@ -13,15 +13,17 @@ export async function runDiff(figmaBase64, webBase64, thresholdPercent) {
   const figmaImg = await loadImage(figmaBase64);
   const webImg = await loadImage(webBase64);
 
-  const targetWidth = Math.min(figmaImg.width, webImg.width);
-  const targetHeight = Math.min(figmaImg.height, webImg.height);
+  // Use the Figma frame as the target size (source of truth)
+  const targetWidth = figmaImg.width;
+  const targetHeight = figmaImg.height;
 
-  // Draw both images at target dimensions
+  // Draw Figma image at its native size
   const figmaCanvas = document.createElement('canvas');
   figmaCanvas.width = targetWidth;
   figmaCanvas.height = targetHeight;
-  figmaCanvas.getContext('2d').drawImage(figmaImg, 0, 0, targetWidth, targetHeight);
+  figmaCanvas.getContext('2d').drawImage(figmaImg, 0, 0);
 
+  // Scale web capture to match Figma dimensions
   const webCanvas = document.createElement('canvas');
   webCanvas.width = targetWidth;
   webCanvas.height = targetHeight;
