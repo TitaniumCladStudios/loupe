@@ -20,6 +20,7 @@
 </script>
 
 <div class="figma-tab">
+  <p class="tab-desc">Receive a frame from Figma via the companion plugin.</p>
   {#if !app.figmaImage}
     <div class="empty-state">
       <div class="icon">
@@ -40,7 +41,7 @@
     <div class="preview">
       <div class="preview-header">
         <h2>Figma Frame</h2>
-        <button class="btn-clear" onclick={handleClear}>Clear</button>
+        <button class="btn-clear" onclick={handleClear} title="Clear the Figma frame and start over">Clear</button>
       </div>
       <div class="preview-image">
         <img src={app.figmaImage.startsWith('data:') ? app.figmaImage : `data:image/png;base64,${app.figmaImage}`} alt="Figma frame" />
@@ -164,7 +165,14 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   }
 
+  .tab-desc {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0 0 12px;
+  }
+
   @media (prefers-color-scheme: dark) {
+    .tab-desc { color: #9ca3af; }
     .empty-state h2 { color: #e5e7eb; }
     .empty-state .icon { color: #4b5563; }
     .status { background: #374151; }

@@ -27,6 +27,7 @@
 </script>
 
 <div class="compare-tab">
+  <p class="tab-desc">Configure and run a pixel-level comparison between the Figma frame and web capture.</p>
   <div class="thumbnails">
     <div class="thumb-card">
       <span class="thumb-label">Figma</span>
@@ -54,17 +55,17 @@
     <div class="setting-row">
       <label for="threshold">Threshold</label>
       <div class="slider-group">
-        <input id="threshold" type="range" min="0" max="100" bind:value={app.threshold} />
+        <input id="threshold" type="range" min="0" max="100" bind:value={app.threshold} title="How sensitive the diff is — lower values catch smaller color differences" />
         <span class="slider-value">{app.threshold}%</span>
       </div>
     </div>
     <div class="setting-row">
       <label for="output-dir">Output directory</label>
-      <input id="output-dir" type="text" bind:value={app.outputDir} oninput={() => setOutputDir(app.outputDir)} placeholder="(optional) path to save diff" class="text-input" />
+      <input id="output-dir" type="text" bind:value={app.outputDir} oninput={() => setOutputDir(app.outputDir)} placeholder="(optional) path to save diff" class="text-input" title="Folder where diff images are saved" />
     </div>
     <div class="setting-row">
       <label for="output-name">Filename</label>
-      <input id="output-name" type="text" bind:value={app.outputFilename} class="text-input" />
+      <input id="output-name" type="text" bind:value={app.outputFilename} class="text-input" title="Filename pattern for saved diffs — {'{timestamp}'} is replaced with the current time" />
     </div>
   </div>
 
@@ -83,7 +84,7 @@
     </div>
   {/if}
 
-  <button class="btn-run" onclick={handleRun} disabled={!canRun}>
+  <button class="btn-run" onclick={handleRun} disabled={!canRun} title="Run pixelmatch comparison between the two captures">
     {running ? 'Comparing...' : 'Run Comparison'}
   </button>
 </div>
@@ -256,7 +257,14 @@
     cursor: not-allowed;
   }
 
+  .tab-desc {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0 0 12px;
+  }
+
   @media (prefers-color-scheme: dark) {
+    .tab-desc { color: #9ca3af; }
     .thumb-label { color: #9ca3af; }
     .thumb-img { background: #111827; border-color: #374151; }
     .thumb-empty { border-color: #4b5563; color: #6b7280; }

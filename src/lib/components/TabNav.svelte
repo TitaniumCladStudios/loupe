@@ -2,6 +2,12 @@
   import { app, isTabComplete } from '$lib/state.svelte.js';
 
   const tabs = ['Figma', 'Web', 'Compare', 'Result'];
+  const tabTips = [
+    'Receive a design frame from Figma via the companion plugin',
+    'Open a browser and capture a web element for comparison',
+    'Configure and run a pixel-level diff between captures',
+    'View the comparison results as a heatmap, side by side, or overlay'
+  ];
 </script>
 
 <nav class="tab-nav">
@@ -11,6 +17,7 @@
       class:active={app.activeTab === i}
       class:complete={isTabComplete(i)}
       onclick={() => app.activeTab = i}
+      title={tabTips[i]}
     >
       {#if isTabComplete(i)}
         <span class="check">&#10003;</span>

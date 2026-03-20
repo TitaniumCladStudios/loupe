@@ -70,22 +70,25 @@
       onkeydown={handleKeydown}
       placeholder="Enter URL (e.g. http://localhost:6006)"
       class="url-input"
+      title="URL of the page containing the component to capture"
     />
     {#if app.browserOpen}
-      <button class="btn btn-secondary" onclick={handleClose}>Close</button>
+      <button class="btn btn-secondary" onclick={handleClose} title="Close the browser window">Close</button>
       <button
         class="btn"
         class:btn-capture-active={capturing}
         class:btn-capture={!capturing}
         onclick={toggleCapture}
+        title={capturing ? 'Deactivate the DOM inspector' : 'Activate the DOM inspector to select and capture an element'}
       >
         {capturing ? 'Stop Capture' : 'Start Capture'}
       </button>
     {/if}
-    <button class="btn btn-primary" onclick={handleOpen} disabled={loading || !urlInput.trim()}>
+    <button class="btn btn-primary" onclick={handleOpen} disabled={loading || !urlInput.trim()} title={app.browserOpen ? 'Reload the browser window with this URL' : 'Open the URL in a browser window'}>
       {loading ? 'Opening...' : app.browserOpen ? 'Reload' : 'Open Browser'}
     </button>
   </div>
+  <p class="tab-desc">Open a browser window, navigate to your component, then capture an element.</p>
 
   <div class="content">
     {#if !app.webCapture}
@@ -119,7 +122,7 @@
       <div class="preview">
         <div class="preview-header">
           <h2>Web Capture</h2>
-          <button class="btn-clear" onclick={handleClear}>Clear</button>
+          <button class="btn-clear" onclick={handleClear} title="Clear the captured image and start over">Clear</button>
         </div>
         <div class="preview-image">
           <img src={app.webCapture} alt="Web element capture" />
@@ -333,7 +336,14 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   }
 
+  .tab-desc {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0 0 12px;
+  }
+
   @media (prefers-color-scheme: dark) {
+    .tab-desc { color: #9ca3af; }
     .url-input { background: #1f2937; border-color: #4b5563; color: #f9fafb; }
     .url-input:focus { border-color: #6366f1; }
     .btn-secondary { background: #374151; border-color: #4b5563; color: #d1d5db; }

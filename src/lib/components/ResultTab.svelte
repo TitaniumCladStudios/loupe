@@ -35,19 +35,20 @@
       </div>
       <h2>No results yet</h2>
       <p>Run a comparison in the previous tab to see results here.</p>
-      <button class="btn-link" onclick={() => app.activeTab = 2}>Go to Compare</button>
+      <button class="btn-link" onclick={() => app.activeTab = 2} title="Go back to the Compare tab to run a comparison">Go to Compare</button>
     </div>
   {:else}
     <div class="results">
+      <p class="tab-desc">Comparison results — view the diff as a heatmap, side by side, or as an overlay.</p>
       <div class="stats-bar">
         <span class="similarity">{app.diffResult.similarity}% similar</span>
         <span class="diff-count">{app.diffResult.diffPixels.toLocaleString()} / {app.diffResult.totalPixels.toLocaleString()} pixels differ</span>
       </div>
 
       <div class="view-toggle">
-        <button class:active={app.viewMode === 'heatmap'} onclick={() => app.viewMode = 'heatmap'}>Heatmap</button>
-        <button class:active={app.viewMode === 'sidebyside'} onclick={() => app.viewMode = 'sidebyside'}>Side by Side</button>
-        <button class:active={app.viewMode === 'overlay'} onclick={() => app.viewMode = 'overlay'}>Overlay</button>
+        <button class:active={app.viewMode === 'heatmap'} onclick={() => app.viewMode = 'heatmap'} title="Show only the pixels that differ">Heatmap</button>
+        <button class:active={app.viewMode === 'sidebyside'} onclick={() => app.viewMode = 'sidebyside'} title="Show web capture and Figma frame next to each other">Side by Side</button>
+        <button class:active={app.viewMode === 'overlay'} onclick={() => app.viewMode = 'overlay'} title="Layer the Figma frame over the web capture with adjustable opacity">Overlay</button>
       </div>
 
       <div class="view-area">
@@ -79,7 +80,7 @@
             </div>
             <div class="opacity-control">
               <label for="overlay-opacity">Figma opacity</label>
-              <input id="overlay-opacity" type="range" min="0" max="1" step="0.01" bind:value={app.overlayOpacity} />
+              <input id="overlay-opacity" type="range" min="0" max="1" step="0.01" bind:value={app.overlayOpacity} title="Adjust the Figma frame transparency" />
               <span>{Math.round(app.overlayOpacity * 100)}%</span>
             </div>
           </div>
@@ -87,7 +88,7 @@
       </div>
 
       <div class="actions">
-        <button class="btn-download" onclick={handleDownload} disabled={saving}>
+        <button class="btn-download" onclick={handleDownload} disabled={saving} title="Save the diff heatmap image to disk">
           {saving ? 'Saving...' : 'Download Diff'}
         </button>
         {#if saveMessage}
@@ -324,7 +325,14 @@
     color: #ef4444;
   }
 
+  .tab-desc {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0 0 12px;
+  }
+
   @media (prefers-color-scheme: dark) {
+    .tab-desc { color: #9ca3af; }
     .empty-state h2 { color: #e5e7eb; }
     .empty-state .icon { color: #4b5563; }
     .btn-link { border-color: #818cf8; color: #818cf8; }
