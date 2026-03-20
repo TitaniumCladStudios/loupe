@@ -168,7 +168,7 @@ fn picker_script() -> String {
         }
         s += '<span style="color:#89b4fa">&gt;</span>';
         // Show text content preview for leaf nodes
-        if (!el.children.length && el.textContent) {
+        if (!el.children.length && !el.shadowRoot && el.textContent) {
             const txt = el.textContent.trim();
             if (txt && txt.length < 60) {
                 s += '<span style="color:#585b70;font-style:italic;"> ' + txt.replace(/</g,'&lt;') + '</span>';
@@ -177,9 +177,11 @@ fn picker_script() -> String {
         return s;
     }
 
-    /* ── Get visible children ── */
-    function visibleChildren(el) {
-        return Array.from(el.children).filter(c =>
+    /* ── Get visible children (works on elements, shadow roots, and document fragments) ── */
+    function visibleChildren(node) {
+        const children = node.children || node.childNodes;
+        return Array.from(children).filter(c =>
+            c.nodeType === 1 &&
             c.id !== '__loupe_inspector' &&
             c.id !== '__loupe_overlay' &&
             c !== toast && c !== overlay && c !== panel
@@ -190,6 +192,7 @@ fn picker_script() -> String {
     function buildNode(el, depth, parent, win, offsets) {
         const kids = visibleChildren(el);
         const isIframe = el.tagName === 'IFRAME';
+        const hasShadow = !!(el.shadowRoot);
         let iframeDoc = null;
 
         if (isIframe) {
@@ -199,7 +202,8 @@ fn picker_script() -> String {
             } catch(e) { iframeDoc = null; }
         }
 
-        const expandable = kids.length > 0 || (iframeDoc && iframeDoc.body.children.length > 0);
+        const shadowKids = hasShadow ? visibleChildren(el.shadowRoot) : [];
+        const expandable = kids.length > 0 || shadowKids.length > 0 || (iframeDoc && iframeDoc.body.children.length > 0);
 
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;padding:1px 8px 1px ' + (12 + depth * 16) + 'px;cursor:pointer;white-space:nowrap;border-radius:2px;min-height:22px;';
@@ -210,6 +214,9 @@ fn picker_script() -> String {
 
         const label = document.createElement('span');
         label.innerHTML = fmtTag(el);
+        if (hasShadow) {
+            label.innerHTML += '<span style="color:#f9e2af;font-size:10px;margin-left:6px;">#shadow-root</span>';
+        }
         if (isIframe && iframeDoc) {
             label.innerHTML += '<span style="color:#f38ba8;font-size:10px;margin-left:6px;">IFRAME</span>';
         } else if (isIframe) {
@@ -246,7 +253,13 @@ fn picker_script() -> String {
 
             if (expanded && !childrenBuilt) {
                 childrenBuilt = true;
-                // iframe children first
+                // Shadow DOM children
+                if (hasShadow) {
+                    shadowKids.forEach(child => {
+                        buildNode(child, depth + 1, childBox, win, offsets);
+                    });
+                }
+                // iframe children
                 if (isIframe && iframeDoc) {
                     const iRect = el.getBoundingClientRect();
                     const nestedOffsets = [...offsets, { top: iRect.top, left: iRect.left }];
@@ -254,6 +267,7 @@ fn picker_script() -> String {
                         buildNode(child, depth + 1, childBox, el.contentWindow, nestedOffsets);
                     });
                 }
+                // Light DOM children
                 kids.forEach(child => {
                     buildNode(child, depth + 1, childBox, win, offsets);
                 });
