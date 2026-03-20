@@ -307,17 +307,13 @@ fn picker_script() -> String {
         try {
             const targetWin = selectedWin || window;
 
-            // Load dom-to-image-more in the correct window context
-            // Uses browser's native CSS renderer — supports oklch, lab, etc.
-            if (!targetWin.domtoimage) {
-                const doc = targetWin.document;
-                const s = doc.createElement('script');
-                s.src = 'https://cdn.jsdelivr.net/npm/dom-to-image-more@3.4.5/dist/dom-to-image-more.min.js';
-                (doc.head || doc.documentElement).appendChild(s);
-                await new Promise((r, j) => { s.onload = r; s.onerror = j; });
-            }
-
-            const dataUrl = await targetWin.domtoimage.toPng(selectedEl);
+            // Use modern-screenshot — handles Shadow DOM and modern CSS (oklch, etc.)
+            const mod = await import('https://cdn.jsdelivr.net/npm/modern-screenshot@4.4.39/+esm');
+            const dataUrl = await mod.domToPng(selectedEl, {
+                scale: 2,
+                backgroundColor: null,
+                style: { margin: '0' },
+            });
 
             const resp = await fetch('http://localhost:7700/capture', {
                 method: 'POST',
